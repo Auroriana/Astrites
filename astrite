@@ -1,0 +1,538 @@
+import { useState, useEffect } from "react";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+} from "recharts";
+
+/* ---------- Global Styles Injection ---------- */
+const GlobalStyles = () => (
+  <style>{`
+    body, html, #root {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: #000;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.4);
+    }
+  `}</style>
+);
+
+/* ---------- UI Components ---------- */
+const Card = ({ title, children, delay = 0, style }) => (
+  <div
+    style={{
+      background: "rgba(20, 20, 20, 0.7)",
+      backdropFilter: "blur(16px)",
+      WebkitBackdropFilter: "blur(16px)",
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      padding: "24px",
+      borderRadius: "16px",
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+      animation: `fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+      animationDelay: `${delay}s`,
+      opacity: 0,
+      display: "flex",
+      flexDirection: "column",
+      ...style
+    }}
+  >
+    {title && (
+      <h2
+        style={{
+          marginBottom: "20px",
+          fontSize: "22px",
+          fontWeight: "bold",
+          color: "#fff",
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          paddingBottom: "10px",
+          fontFamily: '"Times New Roman", Times, serif',
+          letterSpacing: "0.5px",
+        }}
+      >
+        {title}
+      </h2>
+    )}
+    <div style={{ flex: 1, width: "100%" }}>{children}</div>
+    <style>{`
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `}</style>
+  </div>
+);
+
+const Input = (props) => (
+  <input
+    {...props}
+    style={{
+      width: "100%",
+      padding: "14px 16px",
+      borderRadius: "8px",
+      border: "1px solid rgba(255,255,255,0.15)",
+      background: "rgba(0,0,0,0.5)",
+      color: "#fff",
+      fontSize: "16px",
+      fontFamily: '"Times New Roman", Times, serif',
+      outline: "none",
+      transition: "border-color 0.2s",
+    }}
+    onFocus={(e) => (e.target.style.borderColor = "#4ade80")}
+    onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.15)")}
+  />
+);
+
+const TextArea = (props) => (
+  <textarea
+    {...props}
+    style={{
+      width: "100%",
+      padding: "14px 16px",
+      borderRadius: "8px",
+      border: "1px solid rgba(255,255,255,0.15)",
+      background: "rgba(0,0,0,0.5)",
+      color: "#fff",
+      fontSize: "16px",
+      minHeight: "80px",
+      resize: "vertical",
+      fontFamily: '"Times New Roman", Times, serif',
+      outline: "none",
+    }}
+  />
+);
+
+const Button = ({ children, ...props }) => (
+  <button
+    {...props}
+    style={{
+      padding: "12px 20px",
+      borderRadius: "8px",
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: props.style?.background || "linear-gradient(135deg, #4ade80 0%, #22c55e 100%)",
+      color: props.style?.color || "#000",
+      fontWeight: "bold",
+      fontSize: "16px",
+      fontFamily: '"Times New Roman", Times, serif',
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      textTransform: "uppercase",
+      letterSpacing: "1px",
+      ...props.style,
+    }}
+    onMouseEnter={(e) => {
+      e.target.style.transform = "translateY(-2px)";
+      e.target.style.filter = "brightness(1.1)";
+    }}
+    onMouseLeave={(e) => {
+      e.target.style.transform = "translateY(0)";
+      e.target.style.filter = "brightness(1)";
+    }}
+  >
+    {children}
+  </button>
+);
+
+const Progress = ({ value }) => (
+  <div
+    style={{
+      background: "rgba(255,255,255,0.1)",
+      borderRadius: "8px",
+      height: "20px",
+      overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.05)",
+    }}
+  >
+    <div
+      style={{
+        width: `${Math.min(value, 100)}%`,
+        height: "100%",
+        background: "linear-gradient(90deg, #4ade80, #3b82f6)",
+        transition: "width 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 0 15px rgba(74, 222, 128, 0.4)",
+      }}
+    />
+  </div>
+);
+
+/* ---------------------- App ---------------------- */
+
+export default function App() {
+  // --- STATE WITH LOCALSTORAGE LOADING ---
+  const [goal, setGoal] = useState(() => Number(localStorage.getItem("astrite_goal")) || 80000);
+  const [days, setDays] = useState(() => Number(localStorage.getItem("astrite_days")) || 120);
+  const [current, setCurrent] = useState(() => Number(localStorage.getItem("astrite_current")) || 0);
+  const [dailyLog, setDailyLog] = useState(() => {
+    const saved = localStorage.getItem("astrite_log");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [colorA, setColorA] = useState(() => localStorage.getItem("astrite_colorA") || "#0f172a");
+  const [colorB, setColorB] = useState(() => localStorage.getItem("astrite_colorB") || "#000000");
+
+  const [inputSet, setInputSet] = useState("");
+  const [inputNote, setInputNote] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState("Copy Report");
+
+  // --- PERSISTENCE EFFECT ---
+  useEffect(() => {
+    localStorage.setItem("astrite_goal", goal);
+    localStorage.setItem("astrite_days", days);
+    localStorage.setItem("astrite_current", current);
+    localStorage.setItem("astrite_log", JSON.stringify(dailyLog));
+    localStorage.setItem("astrite_colorA", colorA);
+    localStorage.setItem("astrite_colorB", colorB);
+  }, [goal, days, current, dailyLog, colorA, colorB]);
+
+  const resetData = () => {
+    if (confirm("Are you sure you want to reset all data?")) {
+      setGoal(80000);
+      setDays(120);
+      setCurrent(0);
+      setDailyLog([]);
+      localStorage.clear();
+    }
+  };
+
+  const needed = Math.max(goal - current, 0);
+  const perDay = days > 0 ? (needed / days).toFixed(2) : 0;
+  const percent = goal > 0 ? (current / goal) * 100 : 0;
+
+  const lastEntry = dailyLog[dailyLog.length - 1];
+  const secondLastEntry = dailyLog[dailyLog.length - 2];
+  
+  const todayVal = lastEntry?.value || 0;
+  const yesterdayVal = secondLastEntry?.value || 0;
+  const diffFromYesterday = todayVal - yesterdayVal; 
+
+  const recentDays = dailyLog.slice(-7);
+  const avgRecent =
+    recentDays.length > 0
+      ? (
+          recentDays.reduce((sum, entry) => sum + entry.value, 0) /
+          recentDays.length
+        ).toFixed(0)
+      : 0;
+
+  const daysToGoal = avgRecent > 0 ? Math.ceil(needed / avgRecent) : "∞";
+
+  const generateReport = () => {
+    const today = new Date().toLocaleDateString();
+    let finishDate = "Unknown";
+    if (daysToGoal !== "∞") {
+      const dateObj = new Date();
+      dateObj.setDate(dateObj.getDate() + Number(daysToGoal));
+      finishDate = dateObj.toLocaleDateString();
+    }
+
+    const paceStatus = Number(avgRecent) >= Number(perDay) 
+      ? "✅ Ahead of Schedule" 
+      : "⚠️ Behind Schedule";
+
+    const trendText = diffFromYesterday === 0 
+      ? "Same as yesterday" 
+      : `${Math.abs(diffFromYesterday)} ${diffFromYesterday > 0 ? "more" : "less"} than yesterday`;
+
+    return `📊 ASTRITE PROGRESS REPORT - ${today}
+
+🔹 STATUS SUMMARY
+   • Total Balance: ${current.toLocaleString()}
+   • Progress: ${percent.toFixed(2)}% (Goal: ${goal.toLocaleString()})
+   • Remaining: ${needed.toLocaleString()} Astrites
+
+🔹 DAILY LOG
+   • Earned Today: ${todayVal.toLocaleString()}
+   • Trend: ${trendText}
+   • Notes: ${lastEntry?.note || "No notes."}
+
+🔹 PROJECTIONS
+   • Current Pace: ${avgRecent} / day
+   • Required Rate: ${perDay} / day
+   • Pace Status: ${paceStatus}
+   • Est. Completion: ${daysToGoal} days (${finishDate})`;
+  };
+
+  const copyReport = () => {
+    const text = generateReport();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyFeedback("Copied!");
+      setTimeout(() => setCopyFeedback("Copy Report"), 2000);
+    });
+  };
+
+  const setCurrentAstrites = () => {
+    const value = Number(inputSet);
+    if (value < 0 || isNaN(value)) return;
+
+    const diff = value - current;
+    const dayIndex = dailyLog.length + 1;
+    const dateStr = new Date().toLocaleDateString();
+
+    setDailyLog((prev) => [
+      ...prev,
+      {
+        day: `Day ${dayIndex}`,
+        value: diff,
+        total: value,
+        date: dateStr,
+        note: inputNote,
+      },
+    ]);
+
+    setCurrent(value);
+    setInputSet("");
+    setInputNote("");
+    if(days > 0) setDays(d => d - 1);
+  };
+
+  const undoLastEntry = () => {
+    if (dailyLog.length === 0) return;
+    if (confirm("Undo the last entry?")) {
+      const previousTotal =
+        dailyLog.length > 1 ? dailyLog[dailyLog.length - 2].total : 0;
+      setCurrent(previousTotal);
+      setDailyLog((prev) => prev.slice(0, -1));
+      setDays(d => d + 1);
+    }
+  };
+
+  const pieData = [
+    { name: "Current", value: current },
+    { name: "Remaining", value: needed },
+  ];
+
+  return (
+    <>
+      <GlobalStyles />
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          minHeight: "100vh",
+          background: `linear-gradient(135deg, ${colorA} 0%, ${colorB} 100%)`,
+          color: "#e0e0e0",
+          fontFamily: '"Times New Roman", Times, serif',
+          overflowX: "hidden",
+          overflowY: "auto",
+        }}
+      >
+        <div style={{ maxWidth: "3400px", margin: "0 auto", padding: "40px" }}>
+          
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "40px",
+              borderBottom: "1px solid rgba(255,255,255,0.1)",
+              paddingBottom: "20px",
+            }}
+          >
+            <div>
+              <h1 style={{ fontSize: "48px", margin: 0, textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+                Astrite?
+              </h1>
+              <p style={{ margin: "8px 0 0 4px", opacity: 0.6, fontSize: "18px", fontStyle: "italic" }}>
+                Auto-saving Enabled
+              </p>
+            </div>
+            <Button
+              onClick={() => setShowSettings(!showSettings)}
+              style={{ background: "rgba(255,255,255,0.1)", color: "#fff", minWidth: "200px" }}
+            >
+              {showSettings ? "Close Settings" : "Customize / Reset"}
+            </Button>
+          </div>
+
+          {/* Settings Panel */}
+          {showSettings && (
+            <div style={{ marginBottom: "32px" }}>
+              <Card title="Configuration">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "24px" }}>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>Top Gradient</label>
+                    <input type="color" value={colorA} onChange={(e) => setColorA(e.target.value)} style={{cursor:'pointer', border:'none', width:'100%', height:'40px', background:'none'}}/>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>Bottom Gradient</label>
+                    <input type="color" value={colorB} onChange={(e) => setColorB(e.target.value)} style={{cursor:'pointer', border:'none', width:'100%', height:'40px', background:'none'}}/>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end'}}>
+                    <Button onClick={resetData} style={{ background: "#ef4444", color: "#fff", width: '100%' }}>
+                      🔄 Reset All Data
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Report Card */}
+          <div style={{ marginBottom: "32px" }}>
+            <Card title="Report" delay={0.1}>
+              <div style={{ background: "rgba(0,0,0,0.3)", padding: "20px", borderRadius: "12px", fontFamily: "monospace", fontSize: "15px", border: "1px dashed rgba(255,255,255,0.2)", whiteSpace: "pre-line", lineHeight: "1.6" }}>
+                {generateReport()}
+              </div>
+              <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                <Button onClick={copyReport} style={{ background: copyFeedback === "Copied!" ? "#4ade80" : "#3b82f6", color: "#fff", minWidth: "160px" }}>
+                  {copyFeedback === "Copied!" ? "✓ Copied" : "📋 Copy Report"}
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(450px, 1fr))", gap: "24px", width: "100%", marginBottom: "24px" }}>
+            {/* Input Column */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              <Card title="Update Progress" delay={0.2}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <Input type="number" value={inputSet} onChange={(e) => setInputSet(e.target.value)} placeholder="Enter Current Total Astrites..." />
+                  <TextArea value={inputNote} onChange={(e) => setInputNote(e.target.value)} placeholder="Note (e.g. 'Completed Event')..." />
+                  <div style={{ display: "flex", gap: "12px" }}>
+                    <Button onClick={setCurrentAstrites} style={{ flex: 1 }}>Save</Button>
+                    <Button onClick={undoLastEntry} style={{ background: "rgba(239, 68, 68, 0.2)", color: "#fca5a5", border: "1px solid #ef4444", flex: 0.4 }} disabled={dailyLog.length === 0}>Undo</Button>
+                  </div>
+                </div>
+              </Card>
+              <Card title="Parameters" delay={0.3}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div>
+                    <label style={{ fontSize: "14px", opacity: 0.7 }}>Goal Target</label>
+                    <Input type="number" value={goal} onChange={(e) => setGoal(+e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "14px", opacity: 0.7 }}>Days Left</label>
+                    <Input type="number" value={days} onChange={(e) => setDays(+e.target.value)} />
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Stats Column */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              <Card title="Overview" delay={0.4}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span>Progress</span>
+                  <span style={{ color: "#4ade80", fontWeight: "bold", fontSize: "20px" }}>{percent.toFixed(2)}%</span>
+                </div>
+                <Progress value={percent} />
+                <div style={{ marginTop: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div style={{ background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "12px" }}>
+                    <div style={{ opacity: 0.6, fontSize: "14px" }}>Current</div>
+                    <div style={{ fontSize: "28px", fontWeight: "bold" }}>{current.toLocaleString()}</div>
+                  </div>
+                  <div style={{ background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "12px" }}>
+                    <div style={{ opacity: 0.6, fontSize: "14px" }}>Remaining</div>
+                    <div style={{ fontSize: "28px", fontWeight: "bold" }}>{needed.toLocaleString()}</div>
+                  </div>
+                </div>
+              </Card>
+              <Card title="Efficiency Stats" delay={0.5}>
+                <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "16px" }}>
+                  <span>7-Day Average</span>
+                  <span style={{ fontWeight: "bold", color: "#60a5fa", fontSize: "18px" }}>{Number(avgRecent).toLocaleString()} / day</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "16px" }}>
+                  <span>Required Rate</span>
+                  <span style={{ fontWeight: "bold", color: "#f472b6", fontSize: "18px" }}>{perDay} / day</span>
+                </div>
+              </Card>
+            </div>
+
+            {/* Pie Chart Column */}
+            <Card title="Distribution" delay={0.6}>
+               <div style={{ width: "100%", height: "300px" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={5} label>
+                        <Cell fill="#4ade80" stroke="none" />
+                        <Cell fill="rgba(255,255,255,0.1)" stroke="none" />
+                      </Pie>
+                      <Tooltip contentStyle={{ background: "#000", border: "1px solid #333", fontFamily: "Times New Roman" }} itemStyle={{ color: "#fff" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+               </div>
+            </Card>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(600px, 1fr))", gap: "24px", marginBottom: "24px" }}>
+            <Card title="Daily Gains (Bar)" delay={0.7}>
+              <div style={{ width: "100%", height: "350px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyLog}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="day" stroke="#888" />
+                    <YAxis stroke="#888" />
+                    <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ background: "#000", border: "1px solid #333", borderRadius: "8px" }} />
+                    <Bar dataKey="value" fill="#4ade80" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+            <Card title="Total Growth Trend (Line)" delay={0.8}>
+              <div style={{ width: "100%", height: "350px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyLog}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="day" stroke="#888" />
+                    <YAxis stroke="#888" domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ background: "#000", border: "1px solid #333", borderRadius: "8px" }} />
+                    <Line type="monotone" dataKey="total" stroke="#60a5fa" strokeWidth={3} dot={{ fill: '#60a5fa' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </div>
+
+          {dailyLog.length > 0 && (
+            <Card title="History Log" delay={0.9}>
+              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                {[...dailyLog].reverse().map((entry, idx) => (
+                  <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", padding: "16px", borderBottom: "1px solid rgba(255,255,255,0.05)", alignItems: "center", background: idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                    <div>
+                      <span style={{ fontWeight: "bold", fontSize: "18px" }}>{entry.day}</span>
+                      <div style={{ fontSize: "12px", opacity: 0.5 }}>{entry.date}</div>
+                    </div>
+                    <div style={{ color: entry.value >= 0 ? "#4ade80" : "#ef4444", fontSize: "18px", fontWeight: "bold" }}>
+                      {entry.value >= 0 ? "+" : ""}{entry.value.toLocaleString()}
+                    </div>
+                    <div style={{ opacity: 0.8, fontStyle: "italic" }}>{entry.note || "-"}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
